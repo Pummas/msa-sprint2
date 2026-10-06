@@ -1,0 +1,73 @@
+@startuml
+!includeurl https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Component.puml
+
+LAYOUT_WITH_LEGEND()
+
+title Альтернативный вариант: Hotelio с вынесенным Booking Service (Strangler Fig, промежуточное состояние)
+
+Person(user, "User", "Interacts with frontend")
+
+System_Boundary(hotelio, "Hotelio Platform") {
+
+  ' ==== Вынесенный микросервис Booking Service ====
+  Container_Boundary(bookingMs, "Booking Service (microservice)") {
+    Component(bookingController, "BookingController", "Spring MVC", "/api/bookings")
+    Component(bookingService, "BookingService", "Java Service", "Validates and creates bookings: checks user, hotel, promo, reviews; calculates final price and discount")
+    ComponentDb(bookingDb, "Booking DB", "PostgreSQL", "Stores bookings")
+
+    Rel(bookingController, bookingService, "Uses")
+    Rel(bookingService, bookingDb, "Reads/Writes")
+  }
+
+  ' ==== Legacy-монолит ====
+  Container(monolith, "Monolith Application", "Spring Boot", "Legacy app exposing REST endpoints for hotel booking. Не дорабатывается.") {
+
+    ' Controllers (без BookingController — он уехал в микросервис)
+    Component(hotelController, "HotelController", "Spring MVC", "/api/hotels")
+    Component(promoController, "PromoCodeController", "Spring MVC", "/api/promos")
+    Component(reviewController, "ReviewController", "Spring MVC", "/api/reviews")
+    Component(userController, "UserController", "Spring MVC", "/api/users")
+
+    ' Services (без BookingService — он уехал в микросервис)
+    Component(hotelService, "HotelService", "Java Service", "Retrieves hotel details")
+    Component(userService, "UserService", "Java Service", "Validates user status and blacklist")
+    Component(promoService, "PromoCodeService", "Java Service", "Applies discounts and rules")
+    Component(reviewService, "ReviewService", "Java Service", "Manages hotel reviews")
+
+    ' DB монолита (без bookings)
+    ComponentDb(postgres, "Monolith DB", "PostgreSQL", "Stores users, hotels, reviews, promos")
+
+    ' Controller-Service relations
+    Rel(hotelController, hotelService, "Uses")
+    Rel(promoController, promoService, "Uses")
+    Rel(reviewController, reviewService, "Uses")
+    Rel(userController, userService, "Uses")
+
+    ' Service-DB
+    Rel(userService, postgres, "Reads")
+    Rel(hotelService, postgres, "Reads")
+    Rel(promoService, postgres, "Reads")
+    Rel(reviewService, postgres, "Reads/Writes")
+  }
+}
+
+' ==== Межсервисные вызовы (Strangler Fig) ====
+Rel(bookingService, userService, "Validates user status / blacklist", "REST/gRPC")
+Rel(bookingService, hotelService, "Validates hotel and retrieves details", "REST/gRPC")
+Rel(bookingService, promoService, "Validates and applies promo code", "REST/gRPC")
+Rel(bookingService, reviewService, "Gets rating/reviews to validate booking", "REST/gRPC")
+
+' ==== Пользовательские вызовы ====
+Rel(user, bookingController, "Uses")
+Rel(user, hotelController, "Uses")
+Rel(user, promoController, "Uses")
+Rel(user, reviewController, "Uses")
+Rel(user, userController, "Uses")
+
+note bottom of monolith
+  Legacy-монолит сохранён для обратной совместимости.
+  BookingService вынесен как первый шаг Strangler Fig.
+  Новый функционал по бронированиям разрабатывается только в микросервисе.
+end note
+
+@enduml
