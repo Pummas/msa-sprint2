@@ -1,0 +1,55 @@
+@startuml
+!includeurl https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Container.puml
+
+LAYOUT_WITH_LEGEND()
+
+title C2 Container diagram — Hotelio, промежуточное состояние (Strangler Fig): каждый сервис — отдельный микросервис
+
+Person(user, "Пользователь", "Клиент Hotelio")
+
+System_Boundary(hotelio, "Hotelio Platform") {
+
+  Container(web, "Web/Mobile App", "SPA / Mobile", "Интерфейс пользователя")
+
+  Container(gateway, "API Gateway", "Spring Cloud Gateway", "Маршрутизация запросов к микросервисам. Точка входа.")
+
+  Container_Boundary(services, "Микросервисы") {
+    Container(bookingService, "Booking Service", "Spring Boot", "Создание бронирований: проверки, расчёт цены и скидки, сохранение.")
+    Container(userService, "User Service", "Spring Boot", "Статус пользователя, blacklist, профиль.")
+    Container(hotelService, "Hotel Service", "Spring Boot", "Информация об отелях, валидация отеля.")
+    Container(promoService, "Promo Code Service", "Spring Boot", "Промокоды: действительность, применимость, скидки.")
+    Container(reviewService, "Review Service", "Spring Boot", "Отзывы и рейтинг отеля. Влияет на возможность бронирования.")
+  }
+
+  Container_Boundary(databases, "Базы данных (разделены)") {
+    ContainerDb(bookingDb, "Booking DB", "PostgreSQL", "Бронирования")
+    ContainerDb(userDb, "User DB", "PostgreSQL", "Пользователи")
+    ContainerDb(hotelDb, "Hotel DB", "PostgreSQL", "Отели")
+    ContainerDb(promoDb, "Promo DB", "PostgreSQL", "Промокоды")
+    ContainerDb(reviewDb, "Review DB", "PostgreSQL", "Отзывы и рейтинги")
+  }
+
+}
+
+Rel(user, web, "Использует", "HTTPS")
+Rel(web, gateway, "API-запросы", "HTTPS")
+
+Rel(gateway, bookingService, "Маршрутизирует /api/bookings", "REST")
+Rel(gateway, userService, "Маршрутизирует /api/users", "REST")
+Rel(gateway, hotelService, "Маршрутизирует /api/hotels", "REST")
+Rel(gateway, promoService, "Маршрутизирует /api/promos", "REST")
+Rel(gateway, reviewService, "Маршрутизирует /api/reviews", "REST")
+
+Rel(bookingService, userService, "Проверяет статус/blacklist", "REST/gRPC")
+Rel(bookingService, hotelService, "Получает отель и валидирует", "REST/gRPC")
+Rel(bookingService, promoService, "Проверяет и применяет промокод", "REST/gRPC")
+Rel(bookingService, reviewService, "Получает рейтинг/отзывы", "REST/gRPC")
+
+Rel(bookingService, bookingDb, "Reads/Writes", "JDBC")
+Rel(userService, userDb, "Reads/Writes", "JDBC")
+Rel(hotelService, hotelDb, "Reads/Writes", "JDBC")
+Rel(promoService, promoDb, "Reads/Writes", "JDBC")
+Rel(reviewService, reviewDb, "Reads/Writes", "JDBC")
+
+
+@enduml
